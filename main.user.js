@@ -10,13 +10,39 @@
 // @description Automately Play all unwatched search results in a queue, useful to learn language from randomly videos by your everyday.
 // ==/UserScript==
 
-(async function loop() {
-  const $ = (sel) => document.querySelector(sel);
-  const $$ = (sel) => [...document.querySelectorAll(sel)];
+loop();
 
+async function loop() {
   await sleep(300);
-  // click Unwatched if not yet
-  await ensure(async () => {
+  await clickUnwatchedIfNotYet();
+  await clearQueueIfAlreadyHaveList();
+  await waitForActionMenuButtonsShown();
+  console.log("ready");
+
+  // add to playlist queue
+  const menuBtns = $$('yt-icon-button button[aria-label="Action menu"]');
+  for await (const menuBtn of menuBtns) {
+    if (menuBtn.style.backgroundColor === "red") continue;
+    menuBtn.focus();
+    menuBtn.click();
+    menuBtn.style.backgroundColor = "red";
+
+    await sleep(100);
+    await waitFor(() =>
+      $('tp-yt-paper-item[role="option"]:not([aria-disabled="true"])').click()
+    );
+  }
+  await waitFor(async () =>
+    $(".ytp-play-button.ytp-button.ytp-play-button-playlist").click()
+  );
+
+  $(".ytp-miniplayer-expand-watch-page-button").click(); // expand player
+
+  // NOW ENJOY your fresh list
+}
+
+async function clickUnwatchedIfNotYet() {
+  await waitFor(async () => {
     const noOptions =
       $$('[chip-style="STYLE_HOME_FILTER"]').length === 0 &&
       $$('yt-icon-button button[aria-label="Action menu"]').length;
@@ -28,54 +54,28 @@
     $('[chip-style="STYLE_HOME_FILTER"] [title="Unwatched"]').click();
     await sleep(1500);
   });
+}
 
-  // clear queue if already have list
+async function clearQueueIfAlreadyHaveList() {
   if ($(".ytp-miniplayer-close-button")) {
-    await ensure(() => $(".ytp-miniplayer-close-button").click());
-    await ensure(() => $('button[aria-label="Close player"]').click());
+    await waitFor(() => $(".ytp-miniplayer-close-button").click());
+    await waitFor(() => $('button[aria-label="Close player"]').click());
     await sleep(800);
   }
+}
 
-  // wait for action menu buttons
-  await ensure(() => {
+async function waitForActionMenuButtonsShown() {
+  await waitFor(() => {
     if (!$$('yt-icon-button button[aria-label="Action menu"]').length)
       throw "again";
   });
-  console.log("ready");
-
-  // add to playlist queue
-  let i = 0;
-  for (const e of $$('yt-icon-button button[aria-label="Action menu"]')) {
-    if (e.style.backgroundColor === "red") continue;
-
-    e.focus();
-    e.click();
-    e.style.backgroundColor = "red";
-
-    await sleep(100);
-
-    await ensure(async () =>
-      $('tp-yt-paper-item[role="option"]:not([aria-disabled="true"])').click()
-    );
-
-    // click play button after first video queued
-    const isFirst = i++ === 0;
-    if (isFirst)
-      await ensure(async () =>
-        $(".ytp-play-button.ytp-button.ytp-play-button-playlist").click()
-      );
-  }
-
-  // expand player
-  $(".ytp-miniplayer-expand-watch-page-button").click();
-
-  // NOW ENJOY your fresh list
-})();
+}
 
 function DIE(error) {
   throw error;
 }
-async function ensure(fn) {
+
+async function waitFor(fn) {
   const st = +new Date();
   while (+new Date() - st < 5e3) {
     try {
@@ -87,12 +87,14 @@ async function ensure(fn) {
   }
   throw new Error("timeout");
 }
-async function waitFor(conditionFunction) {
-  while (!conditionFunction()) {
-    await sleep(100);
-  }
-}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function $(sel) {
+  return document.querySelector(sel);
+}
+function $$(sel) {
+  return [...document.querySelectorAll(sel)];
 }
