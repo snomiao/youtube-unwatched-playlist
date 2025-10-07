@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        Youtube Auto Play Unwatched Videos in search results.
 // @namespace   snomiao@gmail.com
-// @match       https://www.youtube.com/results*
+// @match       https://www.youtube.com/*
 // @grant       none
 // @version     1.0.0
 // @author      snomiao@gmail.com
@@ -10,91 +10,127 @@
 // @description Automately Play all unwatched search results in a queue, useful to learn language from randomly videos by your everyday.
 // ==/UserScript==
 
-loop();
+const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const tap =
+  (fn, ...rest) =>
+    (value) => (fn(value, ...rest), value);
+const waitFor = async (fn) =>
+  (await fn()) ||
+  (await new Promise((r) => setTimeout(() => r(waitFor(fn)), 200)));
+const waitForFallingEdge = async (fn) =>
+  await waitFor(fn) && await waitFor(async () => !await fn())
+const timeLog =
+  (fn, name = fn.name ?? String(fn)) =>
+    async () => {
+      console.log(name + ': start')
+      console.time(name);
+      await fn().finally(() => console.timeEnd(name));
+    };
 
-async function loop() {
-  await sleep(300);
-  await clickUnwatchedIfNotYet();
-  await clearQueueIfAlreadyHaveList();
-  await waitForActionMenuButtonsShown();
-  console.log("ready");
+const clearQueue = async () =>
+  $$(".ytp-miniplayer-close-button")
+    .filter((e) => e.checkVisibility())
+    .map(tap((e) => e.click()))
+    .at(0) &&
+  (await waitForFallingEdge(() =>
+    $$('tp-yt-paper-toast')
+      .filter(e => e.textContent.match(/Queue cleared/))
+      .filter(e => e.checkVisibility())
+      .at(0)
+  ))
 
-  // add to playlist queue
-  const menuBtns = $$('yt-icon-button button[aria-label="Action menu"]');
-  for await (const menuBtn of menuBtns) {
-    if (menuBtn.style.backgroundColor === "red") continue;
-    menuBtn.focus();
-    menuBtn.click();
-    menuBtn.style.backgroundColor = "red";
+const clickUnwatched = async () =>
+  // wait for filters btn 
+  (await waitFor(() =>
+    $$("[role=text]")
+      .filter((e) => e.textContent.match(/Filters/))
+      ?.at(0)
+  )) &&
+  // return if already unwatched
+  $$("button[aria-selected=true]")
+    .filter((e) => e.textContent.match(/Unwatched|未視聴/))
+    ?.at(0) ||
+  // check unwatched btn and click it
+  $$("button")
+    .filter((e) => e.textContent.match(/Unwatched|未視聴/))
+    .map(tap(e => e.click()))
+    .at(0) &&
+  // if exist, wait for reload and already unwatched
+  await waitForFallingEdge(() => $$("ytd-search[continuation-is-reloading]")[0]) &&
+  await waitFor(() => $$("button[aria-selected=true]")
+    .filter((e) => e.textContent.match(/Unwatched|未視聴/))
+    ?.at(0))
 
-    await sleep(100);
-    await waitFor(() =>
-      $('tp-yt-paper-item[role="option"]:not([aria-disabled="true"])').click()
-    );
-  }
-  await waitFor(async () =>
-    $(".ytp-play-button.ytp-button.ytp-play-button-playlist").click()
+const reset = () =>
+  $$("ytd-menu-renderer>*>button").map((e) => (e.style.background = ""));
+const getNextMenuBtns = async (mark = false) =>
+  $$("ytd-menu-renderer>*>button")
+    .filter((e) => !mark || e.style.background !== "yellow")
+    .slice(0, 1)
+    .map(tap(console.log))
+    .map(tap((e) => !mark || (e.style.background = "yellow")))
+    .map(tap((e) => e.click()))
+    .at(0) &&
+  (await waitFor(() => $$(".ytd-menu-popup-renderer").at(0))) &&
+  $$(".ytd-menu-popup-renderer[role=menuitem]");
+
+const batchClickMenuItem = async (name) =>
+  (await getNextMenuBtns(true))
+    ?.filter((btn) => btn.textContent.match(name))
+    .slice(0, 1)
+    .map(tap((e) => e.click()))
+    .at(0) && (await batchClickMenuItem(name));
+const addAllToQueue = async () =>
+  batchClickMenuItem("Add to queue") &&
+  (await waitForFallingEdge(() =>
+    $$('tp-yt-paper-toast')
+      .filter(e => e.textContent.match(/Added to Queue/))
+      .filter(e => e.checkVisibility())
+      .at(0)
+  ))
+
+const playIt = async () =>
+  (await waitFor(() =>
+    $$(
+      "button.ytp-play-button.ytp-button.ytp-play-button-playlist[data-title-no-tooltip=Play]"
+    )
+      .filter((e) => e.checkVisibility())
+      .map(tap((e) => e.click()))
+      .at(0)
+  )) &&
+  (await waitFor(
+    () =>
+      !$$(
+        "button.ytp-play-button.ytp-button.ytp-play-button-playlist[data-title-no-tooltip=Play]"
+      )
+        .filter((e) => e.checkVisibility())
+        .at(0)
+  ));
+
+const queueAll = async () => {
+  reset();
+  await timeLog(clearQueue)();
+  await timeLog(clickUnwatched)();
+  await timeLog(addAllToQueue)();
+  await sleep(1000)
+  // ensure its playing
+  await timeLog(playIt)();
+  await timeLog(playIt)();
+  await timeLog(playIt)();
+};
+
+const expandIt = async () =>
+  waitFor(
+    $$(".ytp-miniplayer-expand-watch-page-button").map(tap()).at(0).click()
   );
 
-  $(".ytp-miniplayer-expand-watch-page-button").click(); // expand player
+const onPageFinished = (async () => {
+  if (!location.pathname.match(/^\/results/)) return;
+  await queueAll();
+});
 
-  // NOW ENJOY your fresh list
-}
-
-async function clickUnwatchedIfNotYet() {
-  await waitFor(async () => {
-    const noOptions =
-      $$('[chip-style="STYLE_HOME_FILTER"]').length === 0 &&
-      $$('yt-icon-button button[aria-label="Action menu"]').length;
-    const alreadyUnwatched = $(
-      '[chip-style="STYLE_HOME_FILTER"][selected] [title="Unwatched"]'
-    );
-    if (noOptions || alreadyUnwatched) return;
-
-    $('[chip-style="STYLE_HOME_FILTER"] [title="Unwatched"]').click();
-    await sleep(1500);
-  });
-}
-
-async function clearQueueIfAlreadyHaveList() {
-  if ($(".ytp-miniplayer-close-button")) {
-    await waitFor(() => $(".ytp-miniplayer-close-button").click());
-    await waitFor(() => $('button[aria-label="Close player"]').click());
-    await sleep(800);
-  }
-}
-
-async function waitForActionMenuButtonsShown() {
-  await waitFor(() => {
-    if (!$$('yt-icon-button button[aria-label="Action menu"]').length)
-      throw "again";
-  });
-}
-
-function DIE(error) {
-  throw error;
-}
-
-async function waitFor(fn) {
-  const st = +new Date();
-  while (+new Date() - st < 5e3) {
-    try {
-      return await fn();
-    } catch (e) {
-      // pass
-      await sleep(100);
-    }
-  }
-  throw new Error("timeout");
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function $(sel) {
-  return document.querySelector(sel);
-}
-function $$(sel) {
-  return [...document.querySelectorAll(sel)];
-}
+document.addEventListener("yt-page-data-updated", onPageFinished, false);
+document.addEventListener("yt-navigate-finish", onPageFinished, false);
+document.addEventListener("spfdone", onPageFinished, false);
+onPageFinished();
