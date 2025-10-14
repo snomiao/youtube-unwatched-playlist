@@ -1,7 +1,7 @@
 {
   "name": "youtube-unwatched-playlist.user.js",
   "private": true,
-  "version": "1.0.8",
+  "version": "1.0.9",
   "devDependencies": {
     "@biomejs/biome": "^2.2.6",
     "@csmith/release-it-calver-plugin": "^2023.12.0",
