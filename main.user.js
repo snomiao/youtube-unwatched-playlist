@@ -3,7 +3,7 @@
 // @namespace   snomiao@gmail.com
 // @match       https://www.youtube.com/*
 // @grant       none
-// @version     1.0.0
+// @version     1.0.1
 // @author      snomiao@gmail.com
 // @supportURL  https://github.com/snomiao/youtube-unwatched-playlist
 // @supportURL  https://gist.github.com/snomiao/e01612efad527a08c5aec327889c0d2f
