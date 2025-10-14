@@ -2,4 +2,6 @@
 
 message="$(cat $1)"
 bun release
+
 git add package.json main.user.js
+
