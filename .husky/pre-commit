@@ -1,0 +1,4 @@
+#!/bin/sh
+
+bun release
+git add package.json main.user.js
