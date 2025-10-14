@@ -6,7 +6,8 @@
     "requireBranch": "main",
     "commitMessage": "chore: release v${version}",
     "push": false,
-    "commit": false
+    "commit": false,
+    "tag": true
   },
   "plugins": {
     "@release-it/bumper": {

@@ -1,1 +1,2 @@
 bun release
+git add package.json
