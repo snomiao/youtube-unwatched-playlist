@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/release-it@19/schema/release-it.json",
+  "git": {
+    "tagName": "v${version}",
+    "requireCleanWorkingDir": false,
+    "requireBranch": "main",
+    "commitMessage": "chore: release v${version}",
+    "push": false,
+    "commit": false
+  },
+  "plugins": {
+    "@release-it/bumper": {
+      "in": {
+        "file": "package.json"
+      },
+      "out": {
+        "file": "main.user.js",
+        "type": "text/plain"
+      }
+    }
+  }
+}
