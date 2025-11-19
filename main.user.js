@@ -18,6 +18,8 @@
 // @description:fr  Joue automatiquement toutes les vidéos non regardées dans les résultats de recherche en file d'attente, utile pour apprendre une langue à partir de vidéos aléatoires au quotidien.
 // @description:ru  Автоматически воспроизводит все непросмотренные результаты поиска в очереди, полезно для изучения языка из случайных видео каждый день.
 // @description:es  Reproduce automáticamente todos los resultados de búsqueda no vistos en una cola, útil para aprender idiomas de videos aleatorios todos los días.
+// @downloadURL     https://update.greasyfork.org/scripts/529565/Youtube%20Auto%20Play%20Unwatched%20Videos%20in%20search%20results.user.js
+// @updateURL       https://update.greasyfork.org/scripts/529565/Youtube%20Auto%20Play%20Unwatched%20Videos%20in%20search%20results.meta.js
 // ==/UserScript==
 
 const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
@@ -86,29 +88,49 @@ const reset = () =>
   $$("ytd-menu-renderer>*>button").forEach((e) => {
     e.style.background = "";
   });
-const getNextMenuBtns = async (mark = false) =>
+
+const clickDotsAndGetNextMenuBtns = async () =>
   $$("ytd-menu-renderer>*>button")
-    .filter((e) => !mark || e.style.background !== "yellow")
+    .filter((e) => e.style.background !== "yellow")
     .slice(0, 1)
-    .map(tap(console.log))
+    .map(
+      tap((e) =>
+        console.log(
+          "video menu btn",
+          e.parentElement.parentElement.parentElement.parentElement.textContent
+            .replace(/\s+/g, "")
+            .trim(),
+          e,
+        ),
+      ),
+    )
     .map(
       tap((e) => {
-        if (mark) e.style.background = "yellow";
+        e.style.background = "yellow";
       }),
     )
     .map(tap((e) => e.click()))
     .at(0) &&
-  (await waitFor(() => $$(".ytd-menu-popup-renderer").at(0))) &&
+  (await waitFor(() =>
+    $$(".ytd-menu-popup-renderer")
+      .filter((e) => e?.checkVisibility())
+      .at(0),
+  )) &&
   $$(".ytd-menu-popup-renderer[role=menuitem]");
 
-const batchClickMenuItem = async (name) =>
-  (await getNextMenuBtns(true))
-    ?.filter((btn) => btn.textContent.match(name))
+const clickMenuItemForAllVideos = async (action) =>
+  (await clickDotsAndGetNextMenuBtns())
+    ?.filter((btn) => btn.textContent.match(action))
+    ?.filter((btn) => btn?.checkVisibility())
     .slice(0, 1)
     .map(tap((e) => e.click()))
-    .at(0) && (await batchClickMenuItem(name));
+    .map(tap((e) => console.log("action btn", e)))
+    // .map(() => waitFor(() => !e?.checkVisibility())) // wait for disapeared
+    .at(0) && (await clickMenuItemForAllVideos(action));
+// ?.then((e) => e && clickMenuItemForAllVideos(action)); // recursive
+
 const addAllToQueue = async () =>
-  batchClickMenuItem("Add to queue") &&
+  (await clickMenuItemForAllVideos("Add to queue")) &&
   (await waitForFallingEdge(() =>
     $$("tp-yt-paper-toast")
       .filter((e) => e.textContent.match(/Added to Queue/))
@@ -149,7 +171,7 @@ const onPageFinished = async () => {
 
   reset();
   await timeLog(clickUnwatched)();
-  await sleep(2000);
+  await sleep(1000);
   await timeLog(clearQueue)();
   await timeLog(addAllToQueue)();
   // ensure its playing
@@ -168,8 +190,17 @@ const throttled = (ms, fn, last = 0) => {
 };
 
 const main = throttled(200, onPageFinished);
-
-document.addEventListener("yt-page-data-updated", main, false);
-document.addEventListener("yt-navigate-finish", main, false);
-document.addEventListener("spfdone", main, false);
+const ac = new AbortController();
+globalThis.YAPU_ac?.abort();
+globalThis.YAPU_ac = ac;
+const signal = ac.signal;
+document.addEventListener("yt-page-data-updated", main, {
+  signal,
+  capture: false,
+});
+document.addEventListener("yt-navigate-finish", main, {
+  signal,
+  capture: false,
+});
+document.addEventListener("spfdone", main, { signal, capture: false });
 main();
