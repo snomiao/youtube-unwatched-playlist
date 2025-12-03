@@ -14,6 +14,9 @@ This userscript automatically plays all unwatched videos in YouTube search resul
 
 To use this script, you'll need a userscript manager extension like [Tampermonkey](https://www.tampermonkey.net/) or [Greasemonkey](https://www.greasespot.net/).
 
+**[Click here to install the userscript](https://update.greasyfork.org/scripts/529565/Youtube%20Auto%20Play%20Unwatched%20Videos%20in%20search%20results.user.js)**
+
+Or install manually:
 1. Install a userscript manager on your browser.
 2. Create a new script and copy the content of the script above into it.
 3. Save the script.
