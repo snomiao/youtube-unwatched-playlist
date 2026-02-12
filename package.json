@@ -1,15 +1,14 @@
 {
   "name": "youtube-unwatched-playlist.user.js",
   "private": true,
-  "version": "1.0.14",
+  "version": "1.0.15",
   "devDependencies": {
-    "@biomejs/biome": "^2.2.6",
     "@csmith/release-it-calver-plugin": "^2023.12.0",
     "@release-it/bumper": "^7.0.5",
     "husky": "^9.1.7"
   },
   "scripts": {
-    "fmt": "bunx @biomejs/biome check --fix",
+    "fmt": "bunx oxlint --fix && bunx oxfmt",
     "release": "bunx release-it --ci",
     "prepare": "husky"
   }

@@ -18,15 +18,21 @@
 // @description:fr  Joue automatiquement toutes les vidéos non regardées dans les résultats de recherche en file d'attente, utile pour apprendre une langue à partir de vidéos aléatoires au quotidien.
 // @description:ru  Автоматически воспроизводит все непросмотренные результаты поиска в очереди, полезно для изучения языка из случайных видео каждый день.
 // @description:es  Reproduce automáticamente todos los resultados de búsqueda no vistos en una cola, útil para aprender idiomas de videos aleatorios todos los días.
-// @downloadURL     https://update.greasyfork.org/scripts/529565/Youtube%20Auto%20Play%20Unwatched%20Videos%20in%20search%20results.user.js
-// @updateURL       https://update.greasyfork.org/scripts/529565/Youtube%20Auto%20Play%20Unwatched%20Videos%20in%20search%20results.meta.js
 // ==/UserScript==
+
+const reQueueCleared = /Queue cleared/
+const reUnwatched = /Unwatched|未視聴/g
+const reFilters = /Filters|フィルタ/
+const reAddToQueue = /Add to queue|キューに追加/
+const reAddedToQueue = /Added to Queue|キューに追加しました/
+const selClosePlayer = "button[aria-label='Close player']"
+const selPlay = "button.ytp-play-button.ytp-button.ytp-play-button-playlist[data-title-no-tooltip=Play]"
 
 const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const tap =
   (fn, ...rest) =>
-  (value) => (fn(value, ...rest), value);
+    (value) => (fn(value, ...rest), value);
 const waitFor = async (fn) =>
   (await fn()) ||
   (await new Promise((r) => setTimeout(() => r(waitFor(fn)), 200)));
@@ -34,11 +40,11 @@ const waitForFallingEdge = async (fn) =>
   (await waitFor(fn)) && (await waitFor(async () => !(await fn())));
 const timeLog =
   (fn, name = fn.name ?? String(fn)) =>
-  async () => {
-    console.log(`${name}: start`);
-    console.time(name);
-    await fn().finally(() => console.timeEnd(name));
-  };
+    async () => {
+      console.log(`${name}: start`);
+      console.time(name);
+      await fn().finally(() => console.timeEnd(name));
+    };
 
 const clearQueue = async () =>
   $$(".ytp-miniplayer-close-button")
@@ -46,14 +52,14 @@ const clearQueue = async () =>
     .map(tap((e) => e.click()))
     .at(0) &&
   (await waitForFallingEdge(() =>
-    $$("button[aria-label='Close player']")
+    $$(selClosePlayer)
       .filter((e) => e.checkVisibility())
       .map(tap((e) => e.click()))
       .at(0),
   )) &&
   (await waitForFallingEdge(() =>
     $$("tp-yt-paper-toast")
-      .filter((e) => e.textContent.match(/Queue cleared/))
+      .filter((e) => e.textContent.match(reQueueCleared))
       .filter((e) => e.checkVisibility())
       .at(0),
   ));
@@ -62,16 +68,16 @@ const clickUnwatched = async () =>
   // wait for filters btn
   ((await waitFor(() =>
     $$("[role=text]")
-      .filter((e) => e.textContent.match(/Filters/))
+      .filter((e) => e.textContent.match(reFilters))
       ?.at(0),
   )) &&
     // return if already unwatched
     $$("button[aria-selected=true]")
-      .filter((e) => e.textContent.match(/Unwatched|未視聴/))
+      .filter((e) => e.textContent.match(reUnwatched))
       ?.at(0)) ||
   // check unwatched btn and click it
   ($$("button")
-    .filter((e) => e.textContent.match(/Unwatched|未視聴/))
+    .filter((e) => e.textContent.match(reUnwatched))
     .map(tap((e) => e.click()))
     .at(0) &&
     // if exist, wait for reload and already unwatched
@@ -80,7 +86,7 @@ const clickUnwatched = async () =>
     )) &&
     (await waitFor(() =>
       $$("button[aria-selected=true]")
-        .filter((e) => e.textContent.match(/Unwatched|未視聴/))
+        .filter((e) => e.textContent.match(reUnwatched))
         ?.at(0),
     )));
 
@@ -88,52 +94,32 @@ const reset = () =>
   $$("ytd-menu-renderer>*>button").forEach((e) => {
     e.style.background = "";
   });
-
-const clickDotsAndGetNextMenuBtns = async () =>
+const getNextMenuBtns = async (mark = false) =>
   $$("ytd-menu-renderer>*>button")
-    .filter((e) => e.style.background !== "yellow")
+    .filter((e) => !mark || e.style.background !== "yellow")
     .slice(0, 1)
-    .map(
-      tap((e) =>
-        console.log(
-          "video menu btn",
-          e.parentElement.parentElement.parentElement.parentElement.textContent
-            .replace(/\s+/g, "")
-            .trim(),
-          e,
-        ),
-      ),
-    )
+    .map(tap(console.log))
     .map(
       tap((e) => {
-        e.style.background = "yellow";
+        if (mark) e.style.background = "yellow";
       }),
     )
     .map(tap((e) => e.click()))
     .at(0) &&
-  (await waitFor(() =>
-    $$(".ytd-menu-popup-renderer")
-      .filter((e) => e?.checkVisibility())
-      .at(0),
-  )) &&
+  (await waitFor(() => $$(".ytd-menu-popup-renderer").at(0))) &&
   $$(".ytd-menu-popup-renderer[role=menuitem]");
 
-const clickMenuItemForAllVideos = async (action) =>
-  (await clickDotsAndGetNextMenuBtns())
-    ?.filter((btn) => btn.textContent.match(action))
-    ?.filter((btn) => btn?.checkVisibility())
+const batchClickMenuItem = async (name) =>
+  (await getNextMenuBtns(true))
+    ?.filter((btn) => btn.textContent.match(name))
     .slice(0, 1)
     .map(tap((e) => e.click()))
-    .map(tap((e) => console.log("action btn", e)))
-    // .map(() => waitFor(() => !e?.checkVisibility())) // wait for disapeared
-    .at(0) && (await clickMenuItemForAllVideos(action));
-// ?.then((e) => e && clickMenuItemForAllVideos(action)); // recursive
-
+    .at(0) && (await batchClickMenuItem(name));
 const addAllToQueue = async () =>
-  (await clickMenuItemForAllVideos("Add to queue")) &&
+  batchClickMenuItem(reAddToQueue) &&
   (await waitForFallingEdge(() =>
     $$("tp-yt-paper-toast")
-      .filter((e) => e.textContent.match(/Added to Queue/))
+      .filter((e) => e.textContent.match(reAddedToQueue))
       .filter((e) => e.checkVisibility())
       .at(0),
   ));
@@ -141,7 +127,7 @@ const addAllToQueue = async () =>
 const playIt = async () =>
   (await waitFor(() =>
     $$(
-      "button.ytp-play-button.ytp-button.ytp-play-button-playlist[data-title-no-tooltip=Play]",
+      selPlay,
     )
       .filter((e) => e.checkVisibility())
       .map(tap((e) => e.click()))
@@ -150,7 +136,7 @@ const playIt = async () =>
   (await waitFor(
     () =>
       !$$(
-        "button.ytp-play-button.ytp-button.ytp-play-button-playlist[data-title-no-tooltip=Play]",
+        selPlay,
       )
         .filter((e) => e.checkVisibility())
         .at(0),
@@ -171,7 +157,7 @@ const onPageFinished = async () => {
 
   reset();
   await timeLog(clickUnwatched)();
-  await sleep(1000);
+  await sleep(2000);
   await timeLog(clearQueue)();
   await timeLog(addAllToQueue)();
   // ensure its playing
@@ -190,17 +176,8 @@ const throttled = (ms, fn, last = 0) => {
 };
 
 const main = throttled(200, onPageFinished);
-const ac = new AbortController();
-globalThis.YAPU_ac?.abort();
-globalThis.YAPU_ac = ac;
-const signal = ac.signal;
-document.addEventListener("yt-page-data-updated", main, {
-  signal,
-  capture: false,
-});
-document.addEventListener("yt-navigate-finish", main, {
-  signal,
-  capture: false,
-});
-document.addEventListener("spfdone", main, { signal, capture: false });
+
+document.addEventListener("yt-page-data-updated", main, false);
+document.addEventListener("yt-navigate-finish", main, false);
+document.addEventListener("spfdone", main, false);
 main();
