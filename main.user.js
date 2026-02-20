@@ -8,7 +8,7 @@
 // @namespace       snomiao@gmail.com
 // @match           https://www.youtube.com/*
 // @grant           none
-// @version         1.1.2
+// @version         1.1.3
 // @author          snomiao@gmail.com
 // @supportURL      https://github.com/snomiao/youtube-unwatched-playlist
 // @supportURL      https://gist.github.com/snomiao/e01612efad527a08c5aec327889c0d2f
@@ -59,12 +59,13 @@ const clearQueue = async () =>
 			.map(tapClick)
 			.at(0),
 	)) &&
-	(await waitForFallingEdge(() =>
-		$$("tp-yt-paper-toast")
-			.filter((e) => e.textContent.match(reQueueCleared))
-			.filter((e) => e.checkVisibility())
-			.at(0),
-	));
+	(await sleep(2000));
+// (await waitForFallingEdge(() =>
+// 	$$("tp-yt-paper-toast")
+// 		.filter((e) => e.textContent.match(reQueueCleared))
+// 		.filter((e) => e.checkVisibility())
+// 		.at(0),
+// ));
 
 const clickUnwatched = async () =>
 	// wait for filters btn
@@ -116,15 +117,17 @@ const batchClickMenuItem = async (name) =>
 		?.filter((btn) => btn.textContent.match(name))
 		.slice(0, 1)
 		.map(tapClick)
-		.at(0) && (await batchClickMenuItem(name));
+		.at(0) && (await sleep(100), await batchClickMenuItem(name));
+
 const addAllToQueue = async () =>
-	batchClickMenuItem(reAddToQueue) &&
-	(await waitForFallingEdge(() =>
-		$$("tp-yt-paper-toast")
-			.filter((e) => e.textContent.match(reAddedToQueue))
-			.filter((e) => e.checkVisibility())
-			.at(0),
-	));
+	batchClickMenuItem(reAddToQueue) && (await sleep(2000), true);
+
+// (await waitForFallingEdge(() =>
+// 	$$("tp-yt-paper-toast")
+// 		.filter((e) => e.textContent.match(reAddedToQueue))
+// 		.filter((e) => e.checkVisibility())
+// 		.at(0),
+// ));
 
 const playIt = async () =>
 	(await waitFor(() =>
@@ -157,6 +160,7 @@ const onPageFinished = async () => {
 	await timeLog(clickUnwatched)();
 	await sleep(2000);
 	await timeLog(clearQueue)();
+	await sleep(200);
 	await timeLog(addAllToQueue)();
 	// ensure its playing
 	await timeLog(playIt)();
