@@ -8,7 +8,7 @@
 // @namespace       snomiao@gmail.com
 // @match           https://www.youtube.com/*
 // @grant           none
-// @version         1.1.1
+// @version         1.1.2
 // @author          snomiao@gmail.com
 // @supportURL      https://github.com/snomiao/youtube-unwatched-playlist
 // @supportURL      https://gist.github.com/snomiao/e01612efad527a08c5aec327889c0d2f
@@ -20,41 +20,42 @@
 // @description:es  Reproduce automáticamente todos los resultados de búsqueda no vistos en una cola, útil para aprender idiomas de videos aleatorios todos los días.
 // ==/UserScript==
 
-const reQueueCleared = /Queue cleared/
-const reUnwatched = /Unwatched|未視聴/g
-const reFilters = /Filters|フィルタ/
-const reAddToQueue = /Add to queue|キューに追加/
-const reAddedToQueue = /Added to Queue|キューに追加しました/
-const selClosePlayer = "button[aria-label='Close player']"
-const selPlay = "button.ytp-play-button.ytp-button.ytp-play-button-playlist[data-title-no-tooltip=Play]"
+const reQueueCleared = /Queue cleared|キューを削除しました/;
+const reUnwatched = /Unwatched|未視聴/g;
+const reFilters = /Filters|フィルタ/;
+const reAddToQueue = /Add to queue|キューに追加/;
+const reAddedToQueue = /Added to Queue|キューに追加しました/;
+const selClosePlayer = "button[aria-label='Close player'],button[aria-label='プレーヤーを閉じる']";
+const selPlay =
+  "button.ytp-play-button.ytp-button.ytp-play-button-playlist[data-title-no-tooltip=Play]";
 
 const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const tap =
   (fn, ...rest) =>
-    (value) => (fn(value, ...rest), value);
+  (value) => (fn(value, ...rest), value);
 const waitFor = async (fn) =>
-  (await fn()) ||
-  (await new Promise((r) => setTimeout(() => r(waitFor(fn)), 200)));
+  (await fn()) || (await new Promise((r) => setTimeout(() => r(waitFor(fn)), 200)));
 const waitForFallingEdge = async (fn) =>
   (await waitFor(fn)) && (await waitFor(async () => !(await fn())));
+const tapClick = tap((e) => tap((e) => console.log("click", e))(e).click());
 const timeLog =
   (fn, name = fn.name ?? String(fn)) =>
-    async () => {
-      console.log(`${name}: start`);
-      console.time(name);
-      await fn().finally(() => console.timeEnd(name));
-    };
+  async () => {
+    console.log(`${name}: start`);
+    console.time(name);
+    await fn().finally(() => console.timeEnd(name));
+  };
 
 const clearQueue = async () =>
   $$(".ytp-miniplayer-close-button")
     .filter((e) => e.checkVisibility())
-    .map(tap((e) => e.click()))
+    .map(tapClick)
     .at(0) &&
   (await waitForFallingEdge(() =>
     $$(selClosePlayer)
       .filter((e) => e.checkVisibility())
-      .map(tap((e) => e.click()))
+      .map(tapClick)
       .at(0),
   )) &&
   (await waitForFallingEdge(() =>
@@ -78,12 +79,10 @@ const clickUnwatched = async () =>
   // check unwatched btn and click it
   ($$("button")
     .filter((e) => e.textContent.match(reUnwatched))
-    .map(tap((e) => e.click()))
+    .map(tapClick)
     .at(0) &&
     // if exist, wait for reload and already unwatched
-    (await waitForFallingEdge(
-      () => $$("ytd-search[continuation-is-reloading]")[0],
-    )) &&
+    (await waitForFallingEdge(() => $$("ytd-search[continuation-is-reloading]")[0])) &&
     (await waitFor(() =>
       $$("button[aria-selected=true]")
         .filter((e) => e.textContent.match(reUnwatched))
@@ -104,7 +103,7 @@ const getNextMenuBtns = async (mark = false) =>
         if (mark) e.style.background = "yellow";
       }),
     )
-    .map(tap((e) => e.click()))
+    .map(tapClick)
     .at(0) &&
   (await waitFor(() => $$(".ytd-menu-popup-renderer").at(0))) &&
   $$(".ytd-menu-popup-renderer[role=menuitem]");
@@ -113,7 +112,7 @@ const batchClickMenuItem = async (name) =>
   (await getNextMenuBtns(true))
     ?.filter((btn) => btn.textContent.match(name))
     .slice(0, 1)
-    .map(tap((e) => e.click()))
+    .map(tapClick)
     .at(0) && (await batchClickMenuItem(name));
 const addAllToQueue = async () =>
   batchClickMenuItem(reAddToQueue) &&
@@ -126,18 +125,14 @@ const addAllToQueue = async () =>
 
 const playIt = async () =>
   (await waitFor(() =>
-    $$(
-      selPlay,
-    )
+    $$(selPlay)
       .filter((e) => e.checkVisibility())
-      .map(tap((e) => e.click()))
+      .map(tapClick)
       .at(0),
   )) &&
   (await waitFor(
     () =>
-      !$$(
-        selPlay,
-      )
+      !$$(selPlay)
         .filter((e) => e.checkVisibility())
         .at(0),
   ));
@@ -148,7 +143,7 @@ const expandIt = async () =>
       'button[aria-keyshortcuts="i"]', // play
     )
       .filter((e) => e.checkVisibility())
-      .map(tap((e) => e.click()))
+      .map(tapClick)
       .at(0),
   );
 
